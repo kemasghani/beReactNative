@@ -1,10 +1,11 @@
 const express = require('express');
 const mysql = require('mysql2');
 const multer = require('multer');
+const cors = require('cors'); // Import the cors package
 
 const app = express();
 const port = 4000;
-
+app.use(cors());
 // Middleware to parse JSON requests (built-in in Express 4.16.0 and above)
 app.use(express.json());
 
@@ -37,10 +38,6 @@ app.post('/register', (req, res) => {
         return res.status(400).json({ message: 'Username already taken' });
     }
 
-    // Add the user to the in-memory array and MySQL database
-    const newUser = { username, password };
-    users.push(newUser);
-
     // Insert into MySQL database (replace with your database query)
     db.query('INSERT INTO users (username, password) VALUES (?, ?)', [username, password], (err, results) => {
         if (err) {
@@ -51,20 +48,45 @@ app.post('/register', (req, res) => {
         res.json({ message: 'Registration successful' });
     });
 });
+// Add this route to get user ID by username
+app.get('/getUserId/:username', (req, res) => {
+    const { username } = req.params;
+
+    // Use your database query method to find the user ID by username
+    db.promise().query('SELECT id FROM users WHERE username = ?', [username])
+        .then(([user]) => {
+            // If the user is not found, return an error
+            if (!user || user.length === 0) {
+                return res.status(404).json({ message: 'User not found' });
+            }
+
+            // Return the user ID
+            res.json({ userId: user[0].id });
+        })
+        .catch((error) => {
+            console.error('Error getting user ID by username:', error);
+            res.status(500).json({ message: 'Internal server error' });
+        });
+});
 
 // Login endpoint
 app.post('/login', (req, res) => {
     const { username, password } = req.body;
 
-    // Find the user in the in-memory array (replace with database query)
-    const user = users.find(user => user.username === username && user.password === password);
+    // Use your database query method to find the user
+    db.promise().query('SELECT * FROM users WHERE username = ? AND password = ?', [username, password])
+        .then(([user]) => {
+            // If the user is not found or the password is incorrect, return an error
+            if (!user || user.length === 0) {
+                return res.status(401).json({ message: 'Invalid username or password' });
+            }
 
-    // If the user is not found or the password is incorrect, return an error
-    if (!user) {
-        return res.status(401).json({ message: 'Invalid username or password' });
-    }
-
-    res.json({ message: 'Login successful' });
+            res.json({ message: 'Login successful' });
+        })
+        .catch((error) => {
+            console.error('Error during login:', error);
+            res.status(500).json({ message: 'Internal server error' });
+        });
 });
 
 // Multer configuration for handling file uploads
@@ -120,12 +142,12 @@ app.post('/supplier', (req, res) => {
 
 // Reports endpoint to add a report to the report table
 app.post('/report', (req, res) => {
-    const { tanggal, income, outcome } = req.body;
+    const { date, income, outcome } = req.body;
 
     // Insert into reports table (replace with your database query)
     db.query(
-        'INSERT INTO report (tanggal, income, outcome) VALUES (?, ?, ?)',
-        [tanggal, income, outcome],
+        'INSERT INTO report (date, income, outcome) VALUES (?, ?, ?)',
+        [date, income, outcome],
         (err, results) => {
             if (err) {
                 console.error('Error inserting report into database:', err);
@@ -136,6 +158,19 @@ app.post('/report', (req, res) => {
         }
     );
 });
+// Reports endpoint to get all reports
+app.get('/reports', (req, res) => {
+    // Replace with your database query to fetch all reports
+    db.query('SELECT * FROM report', (err, results) => {
+        if (err) {
+            console.error('Error fetching reports from database:', err);
+            return res.status(500).json({ message: 'Internal server error' });
+        }
+
+        res.json(results);
+    });
+});
+
 
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
